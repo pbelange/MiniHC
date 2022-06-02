@@ -1,0 +1,243 @@
+!==========================================
+! Created on June 1st, 2022
+! Authors: D. Kaltchev, P. Belanger
+!==========================================
+option, echo=true, warn=true;
+option,echo,warn,info;
+
+!==========================================
+! USER-DEFINED VALUES
+!==========================================
+
+! Beam
+beam.bv       = 1      ;                   ! [ ]      | Beam direction (-1 for b2)
+beam.energy   = 7000   ;                   ! [GeV]    | Beam energy
+beam.Nb       = 1.1e11 ;                   ! [protons]| Bunch population
+beam.sigt     = 0.075  ;                   ! [m]      | Bunch length at collision
+beam.sige     = 1.1e-4 ;                   ! [s]      | Bunch energy variation
+beam.bunchsep = 25e-9  ;                   ! [s]      | Bunch separation in time 
+beam.emittn   = 2.5e-6 ;                   ! [rad]    | Normalized emittance
+
+
+beam.gamma_r := 1 + beam.energy/pmass   ;
+beam.emitt   := beam.emittn/beam.gamma_r;
+
+! IR optics:
+bstar = 1.04794167;
+
+
+!==========================================
+! Main Elements
+!==========================================
+
+
+! Drifts
+!******************************************
+l.d       = 0.7;
+l.d.trip1 = 0.9;
+l.d.trip2 = 0.6;
+l.d.trip3 = 0.6;
+l.d.trip4 = 2.6;
+
+! d is general drift
+d       : drift, l:= l.d ;
+! d.trip1 - d.trip4 are used in the triplet
+d.trip1 : drift, l:= l.d.trip1;            
+d.trip2 : drift, l:= l.d.trip2;
+d.trip3 : drift, l:= l.d.trip3;
+d.trip4 : drift, l:= l.d.trip4;
+!******************************************
+
+
+! Bending Magnets
+!******************************************
+l.mb      = 1;
+
+arc.ncell = 8;
+nbend     = (arc.ncell*2 + 1)*4 + 8*2 + 1*2;     ! [ ]      | (2 per cell + 1) per arc, then 8 per IP , 1 per joint
+
+! mb.b1 are the general bending dipoles
+mb.b1       : sbend, l:= l.mb, angle:= beam.bv*(twopi/nbend);
+! mb.split.b1 is same as mb.b1, but half, i.e. 2*mb.split.b1 = mb.b1 
+mb.split.b1 : sbend, l:= l.mb/2, angle:= beam.bv*(twopi/nbend)/2;
+! mb.sup.b1 are found in dispersion suppressor : half the angle
+mb.sup.b1   : sbend, l:= l.mb, angle:= beam.bv*(twopi/nbend)/2;
+!******************************************
+
+
+! Quadrupole Magnets
+!******************************************
+l.mq      = 0.1;
+l.mq.trip = 0.5;
+
+kq.f      =  2.8;
+kq.d      = -2.8;
+
+kq.f.sup  = kq.f; 
+kq.d.sup  = kq.d;
+
+kq.trip1  = -1.60; 
+kq.trip2  =  0.12;
+kq.trip3  = -1.80;
+
+! General FODO quadrupoles
+mq.f.b1       : quadrupole, l:= l.mq, k1:= kq.f;
+mq.d.b1       : quadrupole, l:= l.mq, k1:= kq.d;
+! Quadrupoles for dispersion suppressor cell
+mq.f.sup.b1   : quadrupole, l:= l.mq, k1:= kq.f.sup;
+mq.d.sup.b1   : quadrupole, l:= l.mq, k1:= kq.d.sup;
+! Triplet quadrupoles
+mq.trip1.l.b1 : quadrupole, l:= l.mq.trip, k1:=  kq.trip1;
+mq.trip2.l.b1 : quadrupole, l:= l.mq.trip, k1:=  kq.trip2;
+mq.trip3.l.b1 : quadrupole, l:= l.mq.trip, k1:=  kq.trip3;
+mq.trip1.r.b1 : quadrupole, l:= l.mq.trip, k1:= -kq.trip1;
+mq.trip2.r.b1 : quadrupole, l:= l.mq.trip, k1:= -kq.trip2;
+mq.trip3.r.b1 : quadrupole, l:= l.mq.trip, k1:= -kq.trip3;
+!******************************************
+
+!==========================================
+! Defining beam
+!==========================================
+
+Beam,   particle = proton,
+        energy   = beam.energy,
+        sigt     = beam.sigt,
+        bv       = beam.bv,
+        npart    = beam.Nb,
+        sige     = beam.sige,
+        ex       = beam.emitt,
+        ey       = beam.emitt;
+
+
+!==========================================
+! Defining sequence
+!==========================================
+
+! FODO CELL
+!------------
+fodo  : line:= (mq.f.b1 , d , mb.b1 , d , mq.d.b1 , mq.d.b1 , d , mb.b1 , d , mq.f.b1);
+dofo  : line:= (mq.d.b1 , d , mb.b1 , d , mq.f.b1 , mq.f.b1 , d , mb.b1 , d , mq.d.b1);
+
+beta_meas:marker;
+fodo_match: line:= (beta_meas,mq.f.b1 , d , mb.b1 , d , mq.d.b1 , mq.d.b1 , d , mb.b1 , d , mq.f.b1);
+
+
+! Arcs: '4*' needs to be adjusted to be (arc.ncell/2)
+!------------
+arc             : line = (4*dofo , mq.d.b1 , d , mb.b1 , d , mq.f.b1 , 4*fodo);
+arc_match       : line = (mq.d.b1 , d , mb.b1 , d , mq.f.b1);
+
+! To join the arcs, we need and extra mq.f,mq.d. Bend is split to have a centered marker (ip3 and ip7)
+arc_joint(mark) : line = (mq.f.b1,d,mb.split.b1,mark,mb.split.b1,d,mq.d.b1);
+
+
+! Dispersless straigh section
+!------------
+triplet(q1,q2,q3): line:=(d.trip1,q1,d.trip2,q2,d.trip3,q3,d.trip1);
+
+
+cell_supp(qf,qd) : line:=(qf , d , mb.sup.b1 , d , qd , qd , d , mb.sup.b1 , d , qf);
+
+suppressor_l     : line =(fodo,cell_supp(mq.f.sup.b1,mq.d.sup.b1),cell_supp(mq.f.sup.b1,mq.d.sup.b1));
+suppressor_r     : line =(-cell_supp(mq.d.sup.b1,mq.f.sup.b1),-cell_supp(mq.d.sup.b1,mq.f.sup.b1),dofo);
+suppressor_match : line =(fodo,cell_supp(mq.f.sup.b1,mq.d.sup.b1),cell_supp(mq.f.sup.b1,mq.d.sup.b1));
+
+
+
+straight_l       : line =(suppressor_l, 
+                            mq.f.b1 , 
+                            triplet(mq.trip1.l.b1,mq.trip2.l.b1,mq.trip3.l.b1),
+                            triplet(mq.trip1.l.b1,mq.trip2.l.b1,mq.trip3.l.b1),
+                            d.trip4);
+
+straight_r       : line =(d.trip4,
+                            -triplet(mq.trip1.r.b1,mq.trip2.r.b1,mq.trip3.r.b1),
+                            -triplet(mq.trip1.r.b1,mq.trip2.r.b1,mq.trip3.r.b1),
+                            mq.d.b1,
+                            suppressor_r);
+
+! Final lhcb1 sequence
+!------------
+ip1:marker;
+ip3:marker;
+ip5:marker;
+ip7:marker;
+!*************************
+lhcb1      : line=(straight_l , ip1           , straight_r,
+                   arc        , arc_joint(ip3), arc,
+                   straight_l , ip5           , straight_r,
+                   arc        , arc_joint(ip7), arc);
+                   
+lhcb1_match: line=(straight_l,ip1,straight_r,arc_match);
+!*************************
+
+
+
+
+!==========================================
+! Matching the optics around the ring
+!==========================================
+
+! Matching fodo cell to have .25 .25 phase advance
+!------------------------------------------
+use, period=fodo_match;
+match;
+    vary, name=kq.f,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.d,step=.001,UPPER=10,LOWER=-10;
+    
+    constraint,range=#end,mux=.25,muy=.25;
+    
+    lmdif,calls=100;
+endmatch;
+! Saving beta at the entrance of the arc
+savebeta, label = betarc, place = beta_meas;
+twiss;
+!------------------------------------------
+
+
+
+! Matching the dispersion suppressor to cancel out the dispersion
+!------------------------------------------
+use, sequence=suppressor_match;
+match,beta0=betarc,mux=0,muy=0;
+    vary, name=kq.f.sup,step=.001,UPPER=20,LOWER=-20;
+    vary, name=kq.d.sup,step=.001,UPPER=20,LOWER=-20;
+    
+    constraint,range=#end,dx=0,dpx=0;
+    
+    simplex,calls=100;
+    lmdif,calls=1000;
+endmatch;
+!------------------------------------------
+
+
+! Matching the triplet strength to get the bstar
+!------------------------------------------
+use, sequence=lhcb1_match;
+match,beta0=betarc,mux=0,muy=0;
+    vary, name=kq.trip1,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.trip2,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.trip3,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.f.sup,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.d.sup,step=.001,UPPER=10,LOWER=-10;
+    
+    constraint,range=ip1,alfx=0,alfy=0,betx=bstar,bety=bstar,dx=0,dpx=0;
+    !constraint,range=ip5,alfx=0,alfy=0,betx=bstar,bety=bstar,dx=0,dpx=0;
+
+    simplex,calls=100; 
+    lmdif,calls=2000;
+endmatch;
+!------------------------------------------
+
+!==========================================
+! Cycle to start at ip3
+!==========================================
+use, sequence = lhcb1;
+seqedit, sequence = lhcb1;
+    flatten;
+        cycle, start = ip3;
+    flatten;
+endedit;
+
+
+stop;

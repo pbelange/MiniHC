@@ -1,0 +1,757 @@
+
+  ++++++++++++++++++++++++++++++++++++++++++++
+  +     MAD-X 5.08.01  (64 bit, Linux)       +
+  + Support: mad@cern.ch, http://cern.ch/mad +
+  + Release   date: 2022.02.25               +
+  + Execution date: 2022.06.03 00:26:37      +
+  ++++++++++++++++++++++++++++++++++++++++++++
+!==========================================
+
+! Created on June 1st, 2022
+
+! Authors: D. Kaltchev, P. Belanger
+
+!==========================================
+
+option, echo=true, warn=true;
+
+option,echo,warn,info;
+
+
+
+!==========================================
+
+! USER-DEFINED VALUES
+
+!==========================================
+
+
+
+! Beam
+
+beam.bv       = 1      ;                   ! [ ]      | Beam direction (-1 for b2)
+
+beam.energy   = 7000   ;                   ! [GeV]    | Beam energy
+
+beam.Nb       = 1.1e11 ;                   ! [protons]| Bunch population
+
+beam.sigt     = 0.075  ;                   ! [m]      | Bunch length at collision
+
+beam.sige     = 1.1e-4 ;                   ! [s]      | Bunch energy variation
+
+beam.bunchsep = 25e-9  ;                   ! [s]      | Bunch separation in time 
+
+beam.emittn   = 2.5e-6 ;                   ! [rad]    | Normalized emittance
+
+
+
+
+
+beam.gamma_r := 1 + beam.energy/pmass   ;
+
+beam.emitt   := beam.emittn/beam.gamma_r;
+
+
+
+! IR optics:
+
+bstar = 1.04794167;
+
+
+
+
+
+!==========================================
+
+! Main Elements
+
+!==========================================
+
+
+
+
+
+! Drifts
+
+!******************************************
+
+l.d       = 0.7;
+
+l.d.trip1 = 0.9;
+
+l.d.trip2 = 0.6;
+
+l.d.trip3 = 0.6;
+
+l.d.trip4 = 2.6;
+
+
+
+! d is general drift
+
+d       : drift, l:= l.d ;
+
+! d.trip1 - d.trip4 are used in the triplet
+
+d.trip1 : drift, l:= l.d.trip1;            
+
+d.trip2 : drift, l:= l.d.trip2;
+
+d.trip3 : drift, l:= l.d.trip3;
+
+d.trip4 : drift, l:= l.d.trip4;
+
+!******************************************
+
+
+
+
+
+! Bending Magnets
+
+!******************************************
+
+l.mb      = 1;
+
+
+
+arc.ncell = 8;
+
+nbend     = (arc.ncell*2 + 1)*4 + 8*2 + 1*2;     ! [ ]      | (2 per cell + 1) per arc, then 8 per IP , 1 per joint
+
+
+
+! mb.b1 are the general bending dipoles
+
+mb.b1       : sbend, l:= l.mb, angle:= beam.bv*(twopi/nbend);
+
+! mb.split.b1 is same as mb.b1, but half, i.e. 2*mb.split.b1 = mb.b1 
+
+mb.split.b1 : sbend, l:= l.mb/2, angle:= beam.bv*(twopi/nbend)/2;
+
+! mb.sup.b1 are found in dispersion suppressor : half the angle
+
+mb.sup.b1   : sbend, l:= l.mb, angle:= beam.bv*(twopi/nbend)/2;
+
+!******************************************
+
+
+
+
+
+! Quadrupole Magnets
+
+!******************************************
+
+l.mq      = 0.1;
+
+l.mq.trip = 0.5;
+
+
+
+kq.f      =  2.8;
+
+kq.d      = -2.8;
+
+
+
+kq.f.sup  = kq.f; 
+
+kq.d.sup  = kq.d;
+
+
+
+kq.trip1  = -1.60; 
+
+kq.trip2  =  0.12;
+
+kq.trip3  = -1.80;
+
+
+
+! General FODO quadrupoles
+
+mq.f.b1       : quadrupole, l:= l.mq, k1:= kq.f;
+
+mq.d.b1       : quadrupole, l:= l.mq, k1:= kq.d;
+
+! Quadrupoles for dispersion suppressor cell
+
+mq.f.sup.b1   : quadrupole, l:= l.mq, k1:= kq.f.sup;
+
+mq.d.sup.b1   : quadrupole, l:= l.mq, k1:= kq.d.sup;
+
+! Triplet quadrupoles
+
+mq.trip1.l.b1 : quadrupole, l:= l.mq.trip, k1:=  kq.trip1;
+
+mq.trip2.l.b1 : quadrupole, l:= l.mq.trip, k1:=  kq.trip2;
+
+mq.trip3.l.b1 : quadrupole, l:= l.mq.trip, k1:=  kq.trip3;
+
+mq.trip1.r.b1 : quadrupole, l:= l.mq.trip, k1:= -kq.trip1;
+
+mq.trip2.r.b1 : quadrupole, l:= l.mq.trip, k1:= -kq.trip2;
+
+mq.trip3.r.b1 : quadrupole, l:= l.mq.trip, k1:= -kq.trip3;
+
+!******************************************
+
+
+
+!==========================================
+
+! Defining beam
+
+!==========================================
+
+
+
+Beam,   particle = proton,
+
+        energy   = beam.energy,
+
+        sigt     = beam.sigt,
+
+        bv       = beam.bv,
+
+        npart    = beam.Nb,
+
+        sige     = beam.sige,
+
+        ex       = beam.emitt,
+
+        ey       = beam.emitt;
+
+
+
+
+
+!==========================================
+
+! Defining sequence
+
+!==========================================
+
+
+
+! FODO CELL
+
+!------------
+
+fodo  : line:= (mq.f.b1 , d , mb.b1 , d , mq.d.b1 , mq.d.b1 , d , mb.b1 , d , mq.f.b1);
+
+dofo  : line:= (mq.d.b1 , d , mb.b1 , d , mq.f.b1 , mq.f.b1 , d , mb.b1 , d , mq.d.b1);
+
+
+
+beta_meas:marker;
+
+fodo_match: line:= (beta_meas,mq.f.b1 , d , mb.b1 , d , mq.d.b1 , mq.d.b1 , d , mb.b1 , d , mq.f.b1);
+
+
+
+
+
+! Arcs: '4*' needs to be adjusted to be (arc.ncell/2)
+
+!------------
+
+arc             : line = (4*dofo , mq.d.b1 , d , mb.b1 , d , mq.f.b1 , 4*fodo);
+
+arc_match       : line = (mq.d.b1 , d , mb.b1 , d , mq.f.b1);
+
+
+
+! To join the arcs, we need and extra mq.f,mq.d. Bend is split to have a centered marker (ip3 and ip7)
+
+arc_joint(mark) : line = (mq.f.b1,d,mb.split.b1,mark,mb.split.b1,d,mq.d.b1);
+
+
+
+
+
+! Dispersless straigh section
+
+!------------
+
+triplet(q1,q2,q3): line:=(d.trip1,q1,d.trip2,q2,d.trip3,q3,d.trip1);
+
+
+
+
+
+cell_supp(qf,qd) : line:=(qf , d , mb.sup.b1 , d , qd , qd , d , mb.sup.b1 , d , qf);
+
+
+
+suppressor_l     : line =(fodo,cell_supp(mq.f.sup.b1,mq.d.sup.b1),cell_supp(mq.f.sup.b1,mq.d.sup.b1));
+
+suppressor_r     : line =(-cell_supp(mq.d.sup.b1,mq.f.sup.b1),-cell_supp(mq.d.sup.b1,mq.f.sup.b1),dofo);
+
+suppressor_match : line =(fodo,cell_supp(mq.f.sup.b1,mq.d.sup.b1),cell_supp(mq.f.sup.b1,mq.d.sup.b1));
+
+
+
+
+
+
+
+straight_l       : line =(suppressor_l, 
+
+                            mq.f.b1 , 
+
+                            triplet(mq.trip1.l.b1,mq.trip2.l.b1,mq.trip3.l.b1),
+
+                            triplet(mq.trip1.l.b1,mq.trip2.l.b1,mq.trip3.l.b1),
+
+                            d.trip4);
+
+
+
+straight_r       : line =(d.trip4,
+
+                            -triplet(mq.trip1.r.b1,mq.trip2.r.b1,mq.trip3.r.b1),
+
+                            -triplet(mq.trip1.r.b1,mq.trip2.r.b1,mq.trip3.r.b1),
+
+                            mq.d.b1,
+
+                            suppressor_r);
+
+
+
+! Final lhcb1 sequence
+
+!------------
+
+ip1:marker;
+
+ip3:marker;
+
+ip5:marker;
+
+ip7:marker;
+
+!*************************
+
+lhcb1      : line=(straight_l , ip1           , straight_r,
+
+                   arc        , arc_joint(ip3), arc,
+
+                   straight_l , ip5           , straight_r,
+
+                   arc        , arc_joint(ip7), arc);
+
+                   
+
+lhcb1_match: line=(straight_l,ip1,straight_r,arc_match);
+
+!*************************
+
+
+
+
+
+
+
+
+
+!==========================================
+
+! Matching the optics around the ring
+
+!==========================================
+
+
+
+! Matching fodo cell to have .25 .25 phase advance
+
+!------------------------------------------
+
+use, period=fodo_match;
+
+match;
+
+START MATCHING
+
+    vary, name=kq.f,step=.001,UPPER=10,LOWER=-10;
+
+    vary, name=kq.d,step=.001,UPPER=10,LOWER=-10;
+
+    
+
+    constraint,range=#end,mux=.25,muy=.25;
+
+    
+
+    lmdif,calls=100;
+
+number of variables:    2
+user given constraints: 2
+total constraints:      2
+
+START LMDIF:
+
+endmatch;
+
+
+MATCH SUMMARY
+
+Node_Name                  Constraint   Type  Target Value       Final Value        Penalty
+--------------------------------------------------------------------------------------------------
+
+
+Final Penalty Function =   1.41034019e-08
+
+
+
+
+
+Variable                 Final Value  Initial Value Lower Limit  Upper Limit 
+--------------------------------------------------------------------------------
+kq.f                      2.76703e+00  2.80000e+00 -1.00000e+01  1.00000e+01
+kq.d                     -2.78789e+00 -2.80000e+00 -1.00000e+01  1.00000e+01
+
+END MATCH SUMMARY
+
+VARIABLE "TAR" SET TO   1.41034019e-08
+! Saving beta at the entrance of the arc
+
+savebeta, label = betarc, place = beta_meas;
+
+twiss;
+
+enter Twiss module
+
+++++++ table: summ
+
+            length             orbit5               alfa            gammatr 
+               5.2                 -0     0.009743310634        10.13086961 
+
+                q1                dq1            betxmax              dxmax 
+      0.2500085222      -0.3078429648         8.71567427       0.5107528335 
+
+             dxrms             xcomax             xcorms                 q2 
+      0.4157906585                  0                  0       0.2500082708 
+
+               dq2            betymax              dymax              dyrms 
+     -0.3132558814        8.761681179                 -0                  0 
+
+            ycomax             ycorms             deltap            synch_1 
+                 0                  0                  0                  0 
+
+           synch_2            synch_3            synch_4            synch_5 
+                 0                  0                  0                  0 
+
+           synch_6            synch_8             nflips              dqmin 
+                 0                  0                  0                  0 
+
+       dqmin_phase 
+                 0 
+!------------------------------------------
+
+
+
+
+
+
+
+! Matching the dispersion suppressor to cancel out the dispersion
+
+!------------------------------------------
+
+use, sequence=suppressor_match;
+
+match,beta0=betarc,mux=0,muy=0;
+
+START MATCHING
+
+number of beta0s: 1
+BETA0 name: betarc
+entry name: mux
+number of entries: 1
+entry value: 0.000000
+entry name: muy
+number of entries: 1
+entry value: 0.000000
+    vary, name=kq.f.sup,step=.001,UPPER=20,LOWER=-20;
+
+    vary, name=kq.d.sup,step=.001,UPPER=20,LOWER=-20;
+
+    
+
+    constraint,range=#end,dx=0,dpx=0;
+
+    
+
+    simplex,calls=100;
+
+number of variables:    2
+user given constraints: 2
+total constraints:      2
+
+START SIMPLEX:
+
+    lmdif,calls=1000;
+
+number of variables:    2
+user given constraints: 2
+total constraints:      2
+
+START LMDIF:
+
+endmatch;
+
+
+MATCH SUMMARY
+
+Node_Name                  Constraint   Type  Target Value       Final Value        Penalty
+--------------------------------------------------------------------------------------------------
+
+
+Final Penalty Function =   5.47770692e-07
+
+
+
+
+
+Variable                 Final Value  Initial Value Lower Limit  Upper Limit 
+--------------------------------------------------------------------------------
+kq.f.sup                  2.78023e+00  2.80000e+00 -2.00000e+01  2.00000e+01
+kq.d.sup                 -2.75832e+00 -2.80000e+00 -2.00000e+01  2.00000e+01
+
+END MATCH SUMMARY
+
+VARIABLE "TAR" SET TO   5.47770692e-07
+!------------------------------------------
+
+
+
+
+
+! Matching the triplet strength to get the bstar
+
+!------------------------------------------
+
+use, sequence=lhcb1_match;
+
+match,beta0=betarc,mux=0,muy=0;
+
+START MATCHING
+
+number of beta0s: 1
+BETA0 name: betarc
+entry name: mux
+number of entries: 1
+entry value: 0.000000
+entry name: muy
+number of entries: 1
+entry value: 0.000000
+    vary, name=kq.trip1,step=.001,UPPER=10,LOWER=-10;
+
+    vary, name=kq.trip2,step=.001,UPPER=10,LOWER=-10;
+
+    vary, name=kq.trip3,step=.001,UPPER=10,LOWER=-10;
+
+    vary, name=kq.f.sup,step=.001,UPPER=10,LOWER=-10;
+
+    vary, name=kq.d.sup,step=.001,UPPER=10,LOWER=-10;
+
+    
+
+    constraint,range=ip1,alfx=0,alfy=0,betx=bstar,bety=bstar,dx=0,dpx=0;
+
+    !constraint,range=ip5,alfx=0,alfy=0,betx=bstar,bety=bstar,dx=0,dpx=0;
+
+
+
+    simplex,calls=100; 
+
+number of variables:    5
+user given constraints: 6
+total constraints:      6
+
+START SIMPLEX:
+
+    lmdif,calls=2000;
+
+number of variables:    5
+user given constraints: 6
+total constraints:      6
+
+START LMDIF:
+
+Initial Penalty Function =   0.18800462E-02
+
+
+call:       4   Penalty function =   0.14103402E-07
+ ++++++++++ LMDIF ended: converged successfully
+call:       4   Penalty function =   0.14103402E-07
+fodo_match$end:1           mux          4     2.50000000E-01     2.50008522E-01     7.26277584E-09
+fodo_match$end:1           muy          4     2.50000000E-01     2.50008271E-01     6.84062609E-09
+  
+iteration:   1 error:   0.000000E+00 deltap:   0.000000E+00
+orbit:   0.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00  0.000000E+00
+call:      24   Penalty function =   0.20441707E-04
+call:      27   Penalty function =   0.13496577E-04
+call:      30   Penalty function =   0.12321607E-05
+call:      36   Penalty function =   0.92748553E-06
+ converged
+call:      37   Penalty function =   0.54777069E-06
+Initial Penalty Function =   0.54777069E-06
+
+
+ ++++++++++ LMDIF ended: converged successfully
+call:       1   Penalty function =   0.54777069E-06
+suppressor_match$end:1     dx           4     0.00000000E+00     4.61356978E-05     2.12850261E-07
+suppressor_match$end:1     dpx          4     0.00000000E+00     5.78723104E-06     3.34920431E-07
+call:      19   Penalty function =   0.15108437E+11
+call:      23   Penalty function =   0.96866489E+10
+call:      25   Penalty function =   0.46196802E+10
+call:      27   Penalty function =   0.13028296E+10
+call:      30   Penalty function =   0.29027901E+09
+call:      32   Penalty function =   0.18908024E+08
+call:      35   Penalty function =   0.11872690E+06
+call:      38   Penalty function =   0.51499959E+04
+call:      40   Penalty function =   0.20811677E+04
+call:      50   Penalty function =   0.20377016E+04
+call:      90   Penalty function =   0.19656740E+04
+call:      96   Penalty function =   0.18449751E+04
+call:     100   Penalty function =   0.11894558E+04
+ call limit
+call:     102   Penalty function =   0.11894558E+04
+Initial Penalty Function =   0.11894558E+04
+
+
+reset parameter: kq.d.sup                from -0.12630040E+02  to -0.99980000E+01
+call:      10   Penalty function =   0.95269794E+03
+call:      16   Penalty function =   0.84127888E+03
+call:      22   Penalty function =   0.67049636E+03
+call:      28   Penalty function =   0.46460643E+03
+call:      35   Penalty function =   0.42368517E+03
+call:      41   Penalty function =   0.39361485E+03
+call:      47   Penalty function =   0.35083567E+03
+call:      53   Penalty function =   0.32522225E+03
+call:      59   Penalty function =   0.28029835E+03
+call:      65   Penalty function =   0.24378350E+03
+call:      71   Penalty function =   0.20910645E+03
+call:      77   Penalty function =   0.17704464E+03
+call:      83   Penalty function =   0.12733532E+03
+call:      89   Penalty function =   0.11061306E+03
+call:      95   Penalty function =   0.86317496E+02
+call:     101   Penalty function =   0.62004533E+02
+call:     108   Penalty function =   0.27966406E+02
+call:     114   Penalty function =   0.46465698E+01
+call:     120   Penalty function =   0.78774872E+00
+call:     127   Penalty function =   0.83965754E-02
+call:     134   Penalty function =   0.69196921E-02
+call:     140   Penalty function =   0.66368557E-02
+call:     147   Penalty function =   0.62823270E-02
+call:     153   Penalty function =   0.59715078E-02
+call:     160   Penalty function =   0.50227869E-02
+call:     167   Penalty function =   0.48559013E-02
+call:     173   Penalty function =   0.46072187E-02
+call:     180   Penalty function =   0.44399830E-02
+call:     186   Penalty function =   0.43211441E-02
+call:     192   Penalty function =   0.40460402E-02
+call:     199   Penalty function =   0.38892837E-02
+call:     205   Penalty function =   0.38270197E-02
+call:     211   Penalty function =   0.35735551E-02
+call:     217   Penalty function =   0.34988576E-02
+call:     223   Penalty function =   0.33547617E-02
+call:     229   Penalty function =   0.31908425E-02
+call:     235   Penalty function =   0.30882424E-02
+call:     241   Penalty function =   0.29515395E-02
+call:     247   Penalty function =   0.28573963E-02
+call:     253   Penalty function =   0.27395712E-02
+endmatch;
+
+
+MATCH SUMMARY
+
+Node_Name                  Constraint   Type  Target Value       Final Value        Penalty
+--------------------------------------------------------------------------------------------------
+
+
+Final Penalty Function =   1.15921639e-03
+
+
+
+
+
+Variable                 Final Value  Initial Value Lower Limit  Upper Limit 
+--------------------------------------------------------------------------------
+kq.trip1                 -6.85132e-01 -1.60000e+00 -1.00000e+01  1.00000e+01
+kq.trip2                  1.84750e+00  1.20000e-01 -1.00000e+01  1.00000e+01
+kq.trip3                 -1.12499e+00 -1.80000e+00 -1.00000e+01  1.00000e+01
+kq.f.sup                  2.77859e+00  2.78023e+00 -1.00000e+01  1.00000e+01
+kq.d.sup                 -2.75190e+00 -2.75832e+00 -1.00000e+01  1.00000e+01
+
+END MATCH SUMMARY
+
+VARIABLE "TAR" SET TO   1.15921639e-03
+!------------------------------------------
+
+
+
+!==========================================
+
+! Cycle to start at ip3
+
+!==========================================
+
+use, sequence = lhcb1;
+
+seqedit, sequence = lhcb1;
+
+    flatten;
+
+        cycle, start = ip3;
+
+    flatten;
+
+endedit;
+
+++++++ info: seqedit - number of elements installed:  0
+++++++ info: seqedit - number of elements moved:      0
+++++++ info: seqedit - number of elements removed:    0
+++++++ info: seqedit - number of elements replaced:   0
+
+
+
+
+stop;
+
+  Number of warnings: 0
+
+  ++++++++++++++++++++++++++++++++++++++++++++
+  +          MAD-X finished normally         +
+  ++++++++++++++++++++++++++++++++++++++++++++
+enter Twiss module
+
+++++++ table: summ
+
+            length             orbit5               alfa            gammatr 
+             291.2                 -0       0.0071330451        11.84029478 
+
+                q1                dq1            betxmax              dxmax 
+       13.95379387       -22.08492958        45.25537152       0.5160744498 
+
+             dxrms             xcomax             xcorms                 q2 
+      0.3400057728                  0                  0         13.9156318 
+
+               dq2            betymax              dymax              dyrms 
+      -22.38588686        45.93939324                  0                  0 
+
+            ycomax             ycorms             deltap            synch_1 
+                 0                  0                  0                  0 
+
+           synch_2            synch_3            synch_4            synch_5 
+                 0                  0                  0                  0 
+
+           synch_6            synch_8             nflips              dqmin 
+                 0                  0                  0                  0 
+
+       dqmin_phase 
+                 0 
