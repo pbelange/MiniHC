@@ -1,0 +1,401 @@
+!==========================================
+! Created on June 1st, 2022
+! Authors: D. Kaltchev, P. Belanger
+!==========================================
+option, echo=true, warn=true;
+option,echo,warn,info;
+
+!==========================================
+! USER-DEFINED VALUES
+!==========================================
+
+! Beam
+beam.bv.b1    = 1      ;                   ! [ ]      | Beam direction (-1 for b2)
+beam.energy   = 7000   ;                   ! [GeV]    | Beam energy
+beam.Nb       = 1.1e11 ;                   ! [protons]| Bunch population
+beam.sigt     = 0.075  ;                   ! [m]      | Bunch length at collision
+beam.sige     = 1.1e-4 ;                   ! [s]      | Bunch energy variation
+beam.bunchsep = 25e-9  ;                   ! [s]      | Bunch separation in time 
+beam.emittn   = 2.5e-6 ;                   ! [rad]    | Normalized emittance
+
+
+beam.gamma_r := 1 + beam.energy/pmass   ;
+beam.emitt   := beam.emittn/beam.gamma_r;
+
+! IR optics:
+bstar    = 1.05;
+xing.ip1 = 250e-6; 
+xing.ip5 = 250e-6;
+
+
+!==========================================
+! Main Elements
+!==========================================
+
+
+! Drifts
+!******************************************
+l.d       = 0.7;
+l.d.trip1 = 0.9;
+l.d.trip2 = 0.6;
+l.d.trip3 = 0.6;
+l.d.coll  = 2.0;
+
+! d is general drift
+d       : drift, l:= l.d ;
+! d.trip1 - d.trip3 are used in the triplet
+d.trip1 : drift, l:= l.d.trip1;            
+d.trip2 : drift, l:= l.d.trip2;
+d.trip3 : drift, l:= l.d.trip3;
+
+! d.kick is distance between in/out kickers,
+! d.coll is distance to ip.
+d.kick : drift, l:= l.d.coll/3;
+d.coll : drift, l:= l.d.coll;
+!******************************************
+
+
+
+
+! Bending Magnets
+!******************************************
+l.mb      = 1;
+
+arc.ncell = 8;
+nbend     = (arc.ncell*2 + 1)*4 + 8*2 + 1*2;     ! [ ]      | (2 per cell + 1) per arc, then 8 per IP , 1 per joint
+
+! mb.b1 are the general bending dipoles
+mb.b1       : sbend, l:= l.mb, angle:= beam.bv.b1*(twopi/nbend);
+! mb.split.b1 is same as mb.b1, but half, i.e. 2*mb.split.b1 = mb.b1 
+mb.split.b1 : sbend, l:= l.mb/2, angle:= beam.bv.b1*(twopi/nbend)/2;
+! mb.sup.b1 are found in dispersion suppressor : half the angle
+mb.sup.b1   : sbend, l:= l.mb, angle:= beam.bv.b1*(twopi/nbend)/2;
+!******************************************
+
+
+! Quadrupole Magnets
+!******************************************
+l.mq      = 0.1;
+l.mq.trip = 0.5;
+
+kq.f      =  2.8;
+kq.d      = -2.8;
+
+kq.f.sup  = kq.f; 
+kq.d.sup  = kq.d;
+
+kq.trip1  = -1.60; 
+kq.trip2  =  0.12;
+kq.trip3  = -1.80;
+
+! General FODO quadrupoles
+mq.f.b1       : quadrupole, l:= l.mq, k1:= kq.f;
+mq.d.b1       : quadrupole, l:= l.mq, k1:= kq.d;
+! Quadrupoles for dispersion suppressor cell
+mq.f.sup.b1   : quadrupole, l:= l.mq, k1:= kq.f.sup;
+mq.d.sup.b1   : quadrupole, l:= l.mq, k1:= kq.d.sup;
+! Triplet quadrupoles
+mq.trip1.l.b1 : quadrupole, l:= l.mq.trip, k1:=  kq.trip1;
+mq.trip2.l.b1 : quadrupole, l:= l.mq.trip, k1:=  kq.trip2;
+mq.trip3.l.b1 : quadrupole, l:= l.mq.trip, k1:=  kq.trip3;
+mq.trip1.r.b1 : quadrupole, l:= l.mq.trip, k1:= -kq.trip1;
+mq.trip2.r.b1 : quadrupole, l:= l.mq.trip, k1:= -kq.trip2;
+mq.trip3.r.b1 : quadrupole, l:= l.mq.trip, k1:= -kq.trip3;
+!******************************************
+
+
+! Kickers
+!******************************************
+l.hk = 0.001;
+l.vk = 0.001;
+
+! x-plane
+kx.out.l =  0;
+kx.in.l  = -0;
+kx.out.r =  0;
+kx.in.r  = -0;
+kx.max  := 2.5/l.hk;
+!y-plane
+ky.out.l =  0;
+ky.in.l  = -0;
+ky.out.r =  0;
+ky.in.r  = -0;
+ky.max  := 2.5/l.vk;
+
+! Orbit correctors on both sides of IP5 (horizontal)
+hk.out.l.b1 : hkicker, l:= l.hk, kick:= beam.bv.b1*kx.out.l, kmax:= kx.max, kmin:= -kx.max; 
+hk.in.l.b1  : hkicker, l:= l.hk, kick:= beam.bv.b1*kx.in.l , kmax:= kx.max, kmin:= -kx.max; 
+!---------
+hk.out.r.b1 : hkicker, l:= l.hk, kick:= beam.bv.b1*kx.out.r, kmax:= kx.max, kmin:= -kx.max; 
+hk.in.r.b1  : hkicker, l:= l.hk, kick:= beam.bv.b1*kx.in.r , kmax:= kx.max, kmin:= -kx.max; 
+!----------
+
+! Orbit correctors on both sides of IP1 (vertical)
+vk.out.l.b1 : vkicker, l:= l.vk, kick:= ky.out.l, kmax:= ky.max, kmin:= -ky.max; 
+vk.in.l.b1  : vkicker, l:= l.vk, kick:= ky.in.l , kmax:= ky.max, kmin:= -ky.max; 
+!---------
+vk.out.r.b1 : vkicker, l:= l.vk, kick:= ky.out.r, kmax:= ky.max, kmin:= -ky.max; 
+vk.in.r.b1  : vkicker, l:= l.vk, kick:= ky.in.r , kmax:= ky.max, kmin:= -ky.max; 
+!----------
+!******************************************
+
+
+
+
+!==========================================
+! Defining beam
+!==========================================
+
+Beam,   particle = proton,
+        energy   = beam.energy,
+        sigt     = beam.sigt,
+        bv       = beam.bv.b1,
+        npart    = beam.Nb,
+        sige     = beam.sige,
+        ex       = beam.emitt,
+        ey       = beam.emitt;
+
+
+!==========================================
+! Defining sequence
+!==========================================
+
+! FODO CELL
+!------------
+fodo  : line:= (mq.f.b1 , d , mb.b1 , d , mq.d.b1 , mq.d.b1 , d , mb.b1 , d , mq.f.b1);
+dofo  : line:= (mq.d.b1 , d , mb.b1 , d , mq.f.b1 , mq.f.b1 , d , mb.b1 , d , mq.d.b1);
+
+beta_meas:marker;
+fodo_match: line:= (beta_meas,mq.f.b1 , d , mb.b1 , d , mq.d.b1 , mq.d.b1 , d , mb.b1 , d , mq.f.b1);
+
+
+! Arcs: '4*' needs to be adjusted to be (arc.ncell/2)
+!------------
+arc             : line = (4*dofo , mq.d.b1 , d , mb.b1 , d , mq.f.b1 , 4*fodo);
+arc_match       : line = (mq.d.b1 , d , mb.b1 , d , mq.f.b1);
+
+! To join the arcs, we need and extra mq.f,mq.d. Bend is split to have a centered marker (ip3 and ip7)
+arc_joint(mark) : line = (mq.f.b1,d,mb.split.b1,mark,mb.split.b1,d,mq.d.b1);
+
+
+! Dispersless straigh section
+!------------
+triplet(q1,q2,q3): line:=(d.trip1,q1,d.trip2,q2,d.trip3,q3,d.trip1);
+
+
+cell_supp(qf,qd) : line:=(qf , d , mb.sup.b1 , d , qd , qd , d , mb.sup.b1 , d , qf);
+
+suppressor_l     : line =(fodo,cell_supp(mq.f.sup.b1,mq.d.sup.b1),cell_supp(mq.f.sup.b1,mq.d.sup.b1));
+suppressor_r     : line =(-cell_supp(mq.d.sup.b1,mq.f.sup.b1),-cell_supp(mq.d.sup.b1,mq.f.sup.b1),dofo);
+suppressor_match : line =(fodo,cell_supp(mq.f.sup.b1,mq.d.sup.b1),cell_supp(mq.f.sup.b1,mq.d.sup.b1));
+
+
+
+! straight sections left-right and horizontal-vertical (for ip1,ip5)
+straight_h_l     : line =(  suppressor_l, 
+                            mq.f.b1 , 
+                            triplet(mq.trip1.l.b1,mq.trip2.l.b1,mq.trip3.l.b1),
+                            triplet(mq.trip1.l.b1,mq.trip2.l.b1,mq.trip3.l.b1),
+                            hk.out.l.b1,
+                            d.kick,
+                            hk.in.l.b1,
+                            d.coll);
+
+straight_h_r     : line =(  d.coll,
+                            hk.out.r.b1,
+                            d.kick,
+                            hk.in.r.b1,
+                            -triplet(mq.trip1.r.b1,mq.trip2.r.b1,mq.trip3.r.b1),
+                            -triplet(mq.trip1.r.b1,mq.trip2.r.b1,mq.trip3.r.b1),
+                            mq.d.b1,
+                            suppressor_r);
+                            
+straight_v_l     : line =(  suppressor_l, 
+                            mq.f.b1 , 
+                            triplet(mq.trip1.l.b1,mq.trip2.l.b1,mq.trip3.l.b1),
+                            triplet(mq.trip1.l.b1,mq.trip2.l.b1,mq.trip3.l.b1),
+                            vk.out.l.b1,
+                            d.kick,
+                            vk.in.l.b1,
+                            d.coll);
+
+straight_v_r     : line =(  d.coll,
+                            vk.out.r.b1,
+                            d.kick,
+                            vk.in.r.b1,
+                            -triplet(mq.trip1.r.b1,mq.trip2.r.b1,mq.trip3.r.b1),
+                            -triplet(mq.trip1.r.b1,mq.trip2.r.b1,mq.trip3.r.b1),
+                            mq.d.b1,
+                            suppressor_r);
+
+! Final lhcb1 sequence
+!------------
+ip1:marker;
+ip3:marker;
+ip5:marker;
+ip7:marker;
+
+s.ss.ip1 : marker;
+e.ss.ip1 : marker;
+s.ss.ip5 : marker;
+e.ss.ip5 : marker;
+
+!*************************
+clockwise       : line=(    s.ss.ip1 , straight_v_l , ip1 , straight_v_r , e.ss.ip1,
+                            arc , arc_joint(ip3) , arc ,
+                            s.ss.ip5 , straight_h_l , ip5 , straight_h_r , e.ss.ip5, 
+                            arc , arc_joint(ip7) , arc);
+
+anticlockwise   : line=(    s.ss.ip5 , straight_h_l , ip5 , straight_h_r , e.ss.ip5, 
+                            arc , arc_joint(ip3) , arc ,
+                            s.ss.ip1 , straight_v_l , ip1 , straight_v_r , e.ss.ip1,
+                            arc , arc_joint(ip7) , arc);
+                   
+clockwise_match: line=(straight_v_l,ip1,straight_v_r,arc_match);
+!*************************
+
+lhcb1 : line= (clockwise);
+
+
+!==========================================
+! Matching the optics around the ring
+!==========================================
+
+! Matching fodo cell to have .25 .25 phase advance
+!------------------------------------------
+use, period=fodo_match;
+match;
+    vary, name=kq.f,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.d,step=.001,UPPER=10,LOWER=-10;
+    
+    constraint,range=#end,mux=.25,muy=.25;
+    
+    lmdif,calls=100;
+endmatch;
+! Saving beta at the entrance of the arc
+savebeta, label = betarc, place = beta_meas;
+twiss;
+!------------------------------------------
+
+
+
+! Matching the dispersion suppressor to cancel out the dispersion
+!------------------------------------------
+use, sequence=suppressor_match;
+match,beta0=betarc,mux=0,muy=0;
+    vary, name=kq.f.sup,step=.001,UPPER=20,LOWER=-20;
+    vary, name=kq.d.sup,step=.001,UPPER=20,LOWER=-20;
+    
+    constraint,range=#end,dx=0,dpx=0;
+    
+    simplex,calls=100;
+    lmdif,calls=1000;
+endmatch;
+!------------------------------------------
+
+
+! Matching the triplet strength to get the bstar
+!------------------------------------------
+use, sequence=clockwise_match;
+match,beta0=betarc,mux=0,muy=0;
+    vary, name=kq.trip1,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.trip2,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.trip3,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.f.sup,step=.001,UPPER=10,LOWER=-10;
+    vary, name=kq.d.sup,step=.001,UPPER=10,LOWER=-10;
+    
+    constraint,range=ip1,alfx=0,alfy=0,betx=bstar,bety=bstar,dx=0,dpx=0;
+    !constraint,range=ip5,alfx=0,alfy=0,betx=bstar,bety=bstar,dx=0,dpx=0;
+
+    simplex,calls=100; 
+    lmdif,calls=2000;
+endmatch;
+!------------------------------------------
+
+
+
+
+!==========================================
+! Matching the Kickers
+!==========================================
+
+!------------------------------------------
+! Extracting beta at the entry of ip1
+use, sequence=lhcb1;
+savebeta, label = beta.l.ip1, place = s.ss.ip1;
+twiss;
+
+
+use, sequence=lhcb1,range=s.ss.ip1/e.ss.ip1;
+match, beta0=beta.l.ip1,x=0,px=0,y=0,py=0;
+    vary, name=ky.out.l ,step=0.0001;
+    vary, name=ky.in.l  ,step=0.0001;
+    vary, name=ky.out.r ,step=0.0001;
+    vary, name=ky.in.r  ,step=0.0001;
+
+    constraint,range=ip1     ,x=0 ,px=0 ,y=0,py=xing.ip1;
+    constraint,range=e.ss.ip1,x=0 ,px=0 ,y=0,py=0;
+
+    lmdif,calls=100,tolerance=1.0e-14;
+endmatch;
+
+
+
+
+!------------------------------------------
+! Extracting beta at the entry of ip5
+use, sequence=lhcb1;
+savebeta, label = beta.l.ip5, place = s.ss.ip5;
+twiss;
+
+
+use, sequence=lhcb1,range=s.ss.ip5/e.ss.ip5;
+match, beta0=beta.l.ip5,x=0,px=0,y=0,py=0;
+    vary, name=kx.out.l ,step= 0.0001;
+    vary, name=kx.in.l  ,step= 0.0001;
+    vary, name=kx.out.r ,step= 0.0001;
+    vary, name=kx.in.r  ,step= 0.0001;
+
+    constraint,range=ip5     ,x=0    ,px = xing.ip5   ,y=0,py=0;
+    constraint,range=e.ss.ip5,x=0    ,px = 0          ,y=0,py=0;
+
+    lmdif,calls=100,tolerance=1.0e-14;
+endmatch;
+
+
+
+
+!==========================================
+! Cycle to start at ip3
+!==========================================
+use, sequence = lhcb1;
+seqedit, sequence = lhcb1;
+    flatten;
+        cycle, start = ip3;
+    flatten;
+endedit;
+
+
+!==========================================
+! Makethin
+!==========================================
+
+use, sequence=lhcb1;
+select,flag=makethin,slice=2,range=#s/#e;
+makethin,sequence=lhcb1;
+
+
+
+!==========================================
+! Attaching to sequence
+!==========================================
+
+Beam,   sequence = lhcb1,
+        particle = proton,
+        energy   = beam.energy,
+        sigt     = beam.sigt,
+        bv      := beam.bv.b1,
+        npart    = beam.Nb,
+        sige     = beam.sige,
+        ex       = beam.emitt,
+        ey       = beam.emitt;

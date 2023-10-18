@@ -1,0 +1,10 @@
+# Executables/**
+*.ipynb_checkpoint*
+*__pycache*
+*.c
+*.o
+# *.json
+*.DS_Store
+# *.html
+*.pkl
+*.parquet
